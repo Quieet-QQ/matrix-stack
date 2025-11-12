@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16
+    container_name: matrix_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse_pass
+      POSTGRES_DB: synapse
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    networks:
+      - proxy_net
+
+  coturn:   # delete if don't use coturn
+    image: instrumentisto/coturn
+    container_name: matrix_turn
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - TURN_PORT=3478
+      - TURNS_PORT=5349
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: always
+    environment:
+      - SYNAPSE_SERVER_NAME=example.com # don't forget to change
+      - SYNAPSE_REPORT_STATS=no
+    volumes:
+      - ./data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.synapse.rule=Host(`matrix.example.com`)" # don't forget to change
+      - "traefik.http.routers.synapse.entrypoints=websecure"
+      - "traefik.http.routers.synapse.tls.certresolver=letsencrypt"
+      - "traefik.http.services.synapse.loadbalancer.server.port=8008"
+    networks:
+      - proxy_net
+
+  element:
+     image: vectorim/element-web
+     container_name: element
+     restart: always
+     volumes:
+       - ./element/config.json:/app/config.json:ro
+     labels:
+       - "traefik.enable=true"
+       - "traefik.http.routers.element.rule=Host(`element.examople.com`)" # don't forget to change
+       - "traefik.http.routers.element.entrypoints=websecure"
+       - "traefik.http.routers.element.tls.certresolver=letsencrypt"
+       - "traefik.http.services.element.loadbalancer.server.port=80"
+     networks:
+       - proxy_net
+
+networks:
+  proxy_net:
+    external: true
